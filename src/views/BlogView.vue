@@ -18,7 +18,6 @@ const cargando = ref(true)
 const categoriaSeleccionada = ref('Todos')
 const errorCarga = ref('')
 
-// Función para obtener los datos desde el Backend en Render
 const cargarArticulosBackend = async () => {
   try {
     const res = await fetch(`${API_BASE_URL}/api/posts`)
@@ -43,3 +42,20 @@ const filtrarArticulos = () => {
   return articulos.value.filter((art) => art.categoria === categoriaSeleccionada.value)
 }
 </script>
+
+<template>
+  <div style="padding: 20px;">
+    <h2>📚 Blog Veterinario Exótico</h2>
+
+    <div v-if="cargando">Cargando publicaciones...</div>
+    <div v-else-if="errorCarga" style="color: red;">{{ errorCarga }}</div>
+    
+    <div v-else>
+      <div v-for="art in filtrarArticulos()" :key="art.id" style="border: 1px solid #ddd; margin-bottom: 15px; padding: 15px; border-radius: 8px;">
+        <h3>{{ art.emoji }} {{ art.title }}</h3>
+        <small>Por: {{ art.autor }} | Categoria: {{ art.categoria }} | {{ art.tiempoLectura }}</small>
+        <p>{{ art.body }}</p>
+      </div>
+    </div>
+  </div>
+</template>
