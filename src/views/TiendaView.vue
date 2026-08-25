@@ -215,8 +215,28 @@ const cerrarModal = () => mostrarModal.value = false
 .btn-add { background: #2563eb; color: white; border: none; padding: 0.5rem 0.9rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .btn-add:hover { background: #1d4ed8; }
 
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 50; }
-.modal-card { background: white; padding: 2rem; border-radius: 20px; width: 440px; max-width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); }
+/* CSS del Modal Actualizado con Scroll */
+.modal-backdrop { 
+  position: fixed; 
+  inset: 0; 
+  background: rgba(0,0,0,0.6); 
+  backdrop-filter: blur(4px); 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  z-index: 50; 
+  padding: 1rem;
+}
+.modal-card { 
+  background: white; 
+  padding: 2rem; 
+  border-radius: 20px; 
+  width: 440px; 
+  max-width: 100%; 
+  max-height: 85vh; 
+  overflow-y: auto; 
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); 
+}
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .btn-close { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: #6b7280; }
 .modal-total { font-size: 1.1rem; text-align: center; margin-bottom: 1.5rem; background: #f9fafb; padding: 0.75rem; border-radius: 8px; }
