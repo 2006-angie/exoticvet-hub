@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../services/supabase'
 import type { Cita } from '../types'
 
 const usuario = ref<any>(null)
 const citas = ref<Cita[]>([])
 const cargando = ref(false)
+let authListener: { unsubscribe: () => void } | null = null
 
 const nuevaCita = ref<Cita>({
   nombre_cliente: '',
@@ -26,20 +27,33 @@ const comprobarUsuario = async () => {
     await cargarCitas()
   }
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+  // Escuchar cambios de autenticación
+  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
     usuario.value = session?.user || null
     if (session?.user) {
       nuevaCita.value.correo = session.user.email || ''
       nuevaCita.value.nombre_cliente = session.user.user_metadata?.full_name || ''
-      cargarCitas()
+      await cargarCitas()
+    } else {
+      citas.value = []
     }
   })
+  
+  authListener = listener.subscription
+}
+
+// Genera la URL exacta respetando si usas WebHistory o WebHashHistory
+const getRedirectUrl = () => {
+  const isHashMode = window.location.href.includes('#')
+  return isHashMode 
+    ? `${window.location.origin}/#/citas` 
+    : `${window.location.origin}/citas`
 }
 
 const loginGoogle = async () => {
   const { error } = await supabase.auth.signInWithOAuth({ 
     provider: 'google', 
-    options: { redirectTo: window.location.origin + '/citas' } 
+    options: { redirectTo: getRedirectUrl() } 
   })
   if (error) alert('Error al conectar con Google: ' + error.message)
 }
@@ -47,7 +61,7 @@ const loginGoogle = async () => {
 const loginGitHub = async () => {
   const { error } = await supabase.auth.signInWithOAuth({ 
     provider: 'github', 
-    options: { redirectTo: window.location.origin + '/citas' } 
+    options: { redirectTo: getRedirectUrl() } 
   })
   if (error) alert('Error al conectar con GitHub: ' + error.message)
 }
@@ -60,7 +74,11 @@ const logout = async () => {
 
 const cargarCitas = async () => {
   cargando.value = true
-  const { data, error } = await supabase.from('citas').select('*').order('created_at', { ascending: false })
+  const { data, error } = await supabase
+    .from('citas')
+    .select('*')
+    .order('created_at', { ascending: false })
+  
   if (error) console.error('Error al obtener citas:', error.message)
   else citas.value = data || []
   cargando.value = false
@@ -100,15 +118,19 @@ const eliminarCita = async (id: string) => {
 onMounted(() => {
   comprobarUsuario()
 })
+
+onUnmounted(() => {
+  if (authListener) authListener.unsubscribe()
+})
 </script>
 
 <template>
-  <div>
+  <div class="container py-4">
     <h2 class="fw-bold text-success mb-2">Agendamiento de Citas Médicas</h2>
     <p class="text-muted mb-4">Consulta médica especializada para animales exóticos.</p>
 
     <!-- PANTALLA 1: Si NO está autenticado -->
-    <div v-if="!usuario" class="card border-0 shadow-sm p-5 text-center my-4 bg-white">
+    <div v-if="!usuario" class="card border-0 shadow-sm p-5 text-center my-4 bg-white rounded-4">
       <div class="mb-3 fs-1">🔐</div>
       <h4 class="fw-bold text-dark mb-2">Inicia sesión para agendar tu cita</h4>
       <p class="text-muted mb-4 mx-auto" style="max-width: 480px;">
@@ -116,10 +138,10 @@ onMounted(() => {
       </p>
       
       <div class="d-flex justify-content-center gap-3 flex-wrap">
-        <button @click="loginGoogle" class="btn btn-outline-danger d-flex align-items-center gap-2 px-4 py-2 fw-bold">
+        <button @click="loginGoogle" class="btn btn-outline-danger d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3">
           <span>🌐 Continuar con Google</span>
         </button>
-        <button @click="loginGitHub" class="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold">
+        <button @click="loginGitHub" class="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3">
           <span>🐱 Continuar con GitHub</span>
         </button>
       </div>
@@ -128,14 +150,14 @@ onMounted(() => {
     <!-- PANTALLA 2: Si YA está autenticado -->
     <div v-else class="row g-4">
       <div class="col-md-5">
-        <div class="card p-4 shadow-sm border-0">
+        <div class="card p-4 shadow-sm border-0 rounded-4">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold text-dark m-0">Nueva Consulta</h5>
             <div class="d-flex align-items-center gap-2">
-              <span class="badge bg-success-subtle text-success border border-success">
+              <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-2">
                 👤 {{ usuario.email }}
               </span>
-              <button @click="logout" class="btn btn-outline-danger btn-sm py-0 px-2">Salir</button>
+              <button @click="logout" class="btn btn-outline-danger btn-sm rounded-2">Salir</button>
             </div>
           </div>
 
@@ -173,13 +195,13 @@ onMounted(() => {
                 <input v-model="nuevaCita.hora" type="time" class="form-control" required />
               </div>
             </div>
-            <button type="submit" class="btn btn-success w-100 fw-bold">📅 Confirmar y Agendar</button>
+            <button type="submit" class="btn btn-success w-100 fw-bold py-2 rounded-3">📅 Confirmar y Agendar</button>
           </form>
         </div>
       </div>
 
       <div class="col-md-7">
-        <div class="card p-4 shadow-sm border-0">
+        <div class="card p-4 shadow-sm border-0 rounded-4">
           <h5 class="fw-bold text-dark mb-3">Citas Programadas</h5>
           <div v-if="cargando" class="text-center py-4 text-muted">Cargando citas...</div>
           <div v-else-if="citas.length === 0" class="text-center py-4 text-muted">No hay citas registradas en este momento.</div>
@@ -193,7 +215,7 @@ onMounted(() => {
                 </div>
                 <div class="small text-muted">📆 {{ c.fecha }} | ⏰ {{ c.hora }} | ✉️ {{ c.correo }}</div>
               </div>
-              <button @click="c.id && eliminarCita(c.id)" class="btn btn-outline-danger btn-sm">Cancelar</button>
+              <button @click="c.id && eliminarCita(c.id)" class="btn btn-outline-danger btn-sm rounded-2">Cancelar</button>
             </div>
           </div>
         </div>
