@@ -1,18 +1,23 @@
 import type { ArticuloBlog, ClimaData } from '../types'
 
-// URL base de tu Backend en Render
+// URL real de tu Backend (confirmada en el panel de Render):
 const BACKEND_URL = 'https://exoticvet-hub.onrender.com'
 
-// Servicio para consumir el Blog real desde tu Backend
+// 1. Servicio para consumir el Blog real desde tu Backend
 export const getBlogPosts = async (): Promise<ArticuloBlog[]> => {
-  const resp = await fetch(`${BACKEND_URL}/api/posts`)
-  if (!resp.ok) {
-    throw new Error('Error al consultar el servicio de publicaciones')
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/posts`)
+    if (!resp.ok) {
+      throw new Error('Error al consultar el servicio de publicaciones')
+    }
+    return await resp.json()
+  } catch (err) {
+    console.error('Error cargando blog:', err)
+    return []
   }
-  return await resp.json()
 }
 
-// Servicio para consumir el Clima desde Open-Meteo
+// 2. Servicio para consumir el Clima desde Open-Meteo
 export const getWeather = async (city: string = 'Puebla'): Promise<ClimaData | null> => {
   try {
     const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=es`
