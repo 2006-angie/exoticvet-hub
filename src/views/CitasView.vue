@@ -17,25 +17,36 @@ const nuevaCita = ref<Cita>({
   hora: ''
 })
 
+// Centraliza la asignación del usuario y carga sus datos
+const actualizarEstadoUsuario = async (session: any) => {
+  usuario.value = session?.user || null
+  if (session?.user) {
+    nuevaCita.value.correo = session.user.email || ''
+    nuevaCita.value.nombre_cliente = 
+      session.user.user_metadata?.full_name || 
+      session.user.email?.split('@')[0] || ''
+    await cargarCitas()
+  } else {
+    citas.value = []
+  }
+}
+
 const comprobarUsuario = async () => {
-  // 1. Escuchar únicamente los cambios de autenticación para evitar llamadas duplicadas
+  // 1. Revisa la sesión activa inmediatamente (útil al regresar de OAuth o recargar)
+  const { data: { session } } = await supabase.auth.getSession()
+  await actualizarEstadoUsuario(session)
+
+  // 2. Escucha cambios futuros de estado (login / logout)
   const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    usuario.value = session?.user || null
-    if (session?.user) {
-      nuevaCita.value.correo = session.user.email || ''
-      nuevaCita.value.nombre_cliente = session.user.user_metadata?.full_name || ''
-      await cargarCitas()
-    } else {
-      citas.value = []
-    }
+    await actualizarEstadoUsuario(session)
   })
   
   authListener = listener.subscription
 }
 
-// Apunta únicamente al dominio raíz para evitar problemas con rutas de Hash
+// Redirección a la URL actual limpia sin parámetros residuales
 const getRedirectUrl = () => {
-  return `${window.location.origin}/`
+  return `${window.location.origin}${window.location.pathname}`
 }
 
 const loginGoogle = async () => {
@@ -58,6 +69,7 @@ const loginGitHub = async () => {
   })
   if (error) alert('Error al conectar con GitHub: ' + error.message)
 }
+
 const logout = async () => {
   await supabase.auth.signOut()
   usuario.value = null
