@@ -32,11 +32,11 @@ const actualizarEstadoUsuario = async (session: any) => {
 }
 
 const comprobarUsuario = async () => {
-  // 1. Revisa la sesión activa inmediatamente (útil al regresar de OAuth o recargar)
+  // 1. Obtener la sesión activa inmediatamente si ya recargó la página
   const { data: { session } } = await supabase.auth.getSession()
   await actualizarEstadoUsuario(session)
 
-  // 2. Escucha cambios futuros de estado (login / logout)
+  // 2. Escuchar eventos de inicio o cierre de sesión
   const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
     await actualizarEstadoUsuario(session)
   })
@@ -44,9 +44,11 @@ const comprobarUsuario = async () => {
   authListener = listener.subscription
 }
 
-// Redirección a la URL actual limpia sin parámetros residuales
+// Redirección fija a la raíz del entorno desplegado o local
 const getRedirectUrl = () => {
-  return `${window.location.origin}${window.location.pathname}`
+  return window.location.hostname === 'localhost'
+    ? 'http://localhost:5173/'
+    : 'https://exoticvet-frontend.onrender.com/'
 }
 
 const loginGoogle = async () => {
@@ -54,7 +56,10 @@ const loginGoogle = async () => {
     provider: 'google', 
     options: { 
       redirectTo: getRedirectUrl(),
-      queryParams: { prompt: 'select_account' }
+      queryParams: { 
+        access_type: 'offline',
+        prompt: 'consent'
+      }
     } 
   })
   if (error) alert('Error al conectar con Google: ' + error.message)
