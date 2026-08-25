@@ -1,8 +1,11 @@
 import type { ArticuloBlog, ClimaData } from '../types'
 
-// Servicio para consumir el Blog desde JSONPlaceholder
+// URL base de tu Backend en Render
+const BACKEND_URL = 'https://exoticvet-hub.onrender.com'
+
+// Servicio para consumir el Blog real desde tu Backend
 export const getBlogPosts = async (): Promise<ArticuloBlog[]> => {
-  const resp = await fetch('https://jsonplaceholder.typicode.com/posts?_limit=9')
+  const resp = await fetch(`${BACKEND_URL}/api/posts`)
   if (!resp.ok) {
     throw new Error('Error al consultar el servicio de publicaciones')
   }
