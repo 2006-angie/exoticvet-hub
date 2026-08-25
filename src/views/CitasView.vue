@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { supabase } from '../services/supabase'
+import { supabase, loginWithProvider, logoutUser } from '../services/supabase'
 import type { Cita } from '../types'
 
 const usuario = ref<any>(null)
 const citas = ref<Cita[]>([])
 const cargando = ref(false)
-let authListener: { unsubscribe: () => void } | null = null
+let authSubscription: { unsubscribe: () => void } | null = null
 
 const nuevaCita = ref<Cita>({
   nombre_cliente: '',
@@ -17,68 +17,42 @@ const nuevaCita = ref<Cita>({
   hora: ''
 })
 
-// Centraliza la asignación del usuario y carga sus datos
-const actualizarEstadoUsuario = async (session: any) => {
+// Actualizar el estado del usuario cuando cambie la sesión
+const sincronizarUsuario = (session: any) => {
   usuario.value = session?.user || null
   if (session?.user) {
     nuevaCita.value.correo = session.user.email || ''
     nuevaCita.value.nombre_cliente = 
       session.user.user_metadata?.full_name || 
       session.user.email?.split('@')[0] || ''
-    await cargarCitas()
-  } else {
-    citas.value = []
   }
 }
 
-const comprobarUsuario = async () => {
-  // 1. Obtener la sesión activa inmediatamente si ya recargó la página
+const inicializarAuth = async () => {
+  // 1. Verificar sesión existente al cargar
   const { data: { session } } = await supabase.auth.getSession()
-  await actualizarEstadoUsuario(session)
+  sincronizarUsuario(session)
 
-  // 2. Escuchar eventos de inicio o cierre de sesión
-  const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    await actualizarEstadoUsuario(session)
+  // 2. Escuchar cambios de estado (login/logout/callback OAuth)
+  const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    sincronizarUsuario(session)
   })
   
-  authListener = listener.subscription
+  authSubscription = listener.subscription
+  await cargarCitas()
 }
 
-// Redirección fija a la raíz del entorno desplegado o local
-const getRedirectUrl = () => {
-  return window.location.hostname === 'localhost'
-    ? 'http://localhost:5173/'
-    : 'https://exoticvet-frontend.onrender.com/'
-}
+const handleLoginGoogle = () => loginWithProvider('google')
+const handleLoginGitHub = () => loginWithProvider('github')
 
-const loginGoogle = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({ 
-    provider: 'google', 
-    options: { 
-      redirectTo: getRedirectUrl(),
-      queryParams: { 
-        access_type: 'offline',
-        prompt: 'consent'
-      }
-    } 
-  })
-  if (error) alert('Error al conectar con Google: ' + error.message)
-}
-
-const loginGitHub = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({ 
-    provider: 'github', 
-    options: { 
-      redirectTo: getRedirectUrl()
-    } 
-  })
-  if (error) alert('Error al conectar con GitHub: ' + error.message)
-}
-
-const logout = async () => {
-  await supabase.auth.signOut()
+const handleLogout = async () => {
+  await logoutUser()
   usuario.value = null
-  citas.value = []
+  nuevaCita.value.nombre_cliente = ''
+  nuevaCita.value.correo = ''
+  nuevaCita.value.mascota = ''
+  nuevaCita.value.fecha = ''
+  nuevaCita.value.hora = ''
 }
 
 const cargarCitas = async () => {
@@ -94,17 +68,25 @@ const cargarCitas = async () => {
 }
 
 const agendarCita = async () => {
-  if (!nuevaCita.value.nombre_cliente || !nuevaCita.value.fecha || !nuevaCita.value.hora) {
-    alert('Por favor completa todos los campos del formulario.')
+  if (!nuevaCita.value.nombre_cliente || !nuevaCita.value.correo || !nuevaCita.value.fecha || !nuevaCita.value.hora) {
+    alert('Por favor completa todos los campos obligatorios.')
     return
   }
 
-  const { error } = await supabase.from('citas').insert([
-    {
-      ...nuevaCita.value,
-      user_id: usuario.value?.id
-    }
-  ])
+  const payload: any = {
+    nombre_cliente: nuevaCita.value.nombre_cliente,
+    correo: nuevaCita.value.correo,
+    mascota: nuevaCita.value.mascota,
+    especie: nuevaCita.value.especie,
+    fecha: nuevaCita.value.fecha,
+    hora: nuevaCita.value.hora
+  }
+
+  if (usuario.value?.id) {
+    payload.user_id = usuario.value.id
+  }
+
+  const { error } = await supabase.from('citas').insert([payload])
 
   if (error) {
     alert('Error al guardar la cita: ' + error.message)
@@ -113,6 +95,10 @@ const agendarCita = async () => {
     nuevaCita.value.mascota = ''
     nuevaCita.value.fecha = ''
     nuevaCita.value.hora = ''
+    if (!usuario.value) {
+      nuevaCita.value.nombre_cliente = ''
+      nuevaCita.value.correo = ''
+    }
     await cargarCitas()
   }
 }
@@ -124,13 +110,8 @@ const eliminarCita = async (id: string) => {
   else await cargarCitas()
 }
 
-onMounted(() => {
-  comprobarUsuario()
-})
-
-onUnmounted(() => {
-  if (authListener) authListener.unsubscribe()
-})
+onMounted(() => { inicializarAuth() })
+onUnmounted(() => { if (authSubscription) authSubscription.unsubscribe() })
 </script>
 
 <template>
@@ -138,46 +119,57 @@ onUnmounted(() => {
     <h2 class="fw-bold text-success mb-2">Agendamiento de Citas Médicas</h2>
     <p class="text-muted mb-4">Consulta médica especializada para animales exóticos.</p>
 
-    <!-- PANTALLA 1: Si NO está autenticado -->
-    <div v-if="!usuario" class="card border-0 shadow-sm p-5 text-center my-4 bg-white rounded-4">
-      <div class="mb-3 fs-1">🔐</div>
-      <h4 class="fw-bold text-dark mb-2">Inicia sesión para agendar tu cita</h4>
-      <p class="text-muted mb-4 mx-auto" style="max-width: 480px;">
-        Para garantizar el seguimiento médico de tu mascota, necesitas acceder con tu cuenta antes de elegir fecha y hora.
-      </p>
-      
-      <div class="d-flex justify-content-center gap-3 flex-wrap">
-        <button @click="loginGoogle" class="btn btn-outline-danger d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3">
-          <span>🌐 Continuar con Google</span>
-        </button>
-        <button @click="loginGitHub" class="btn btn-dark d-flex align-items-center gap-2 px-4 py-2 fw-bold rounded-3">
-          <span>🐱 Continuar con GitHub</span>
-        </button>
+    <!-- BARRA DE AUTENTICACIÓN -->
+    <div class="card border-0 bg-light p-3 rounded-4 mb-4 shadow-sm">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div v-if="!usuario">
+          <span class="fw-bold text-dark me-2">💡 Acceso (Opcional):</span>
+          <span class="text-muted small">Inicia sesión para autocompletar tus datos</span>
+        </div>
+        <div v-else class="d-flex align-items-center gap-2">
+          <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-2">
+            👤 Conectado como: {{ usuario.email }}
+          </span>
+        </div>
+
+        <div v-if="!usuario" class="d-flex gap-2">
+          <button @click="handleLoginGoogle" class="btn btn-sm btn-outline-danger fw-bold rounded-3">🌐 Google</button>
+          <button @click="handleLoginGitHub" class="btn btn-sm btn-dark fw-bold rounded-3">🐱 GitHub</button>
+        </div>
+        <div v-else>
+          <button @click="handleLogout" class="btn btn-sm btn-outline-secondary rounded-2">Cerrar Sesión</button>
+        </div>
       </div>
     </div>
 
-    <!-- PANTALLA 2: Si YA está autenticado -->
-    <div v-else class="row g-4">
+    <!-- FORMULARIO DE CITAS -->
+    <div class="row g-4">
       <div class="col-md-5">
         <div class="card p-4 shadow-sm border-0 rounded-4">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="fw-bold text-dark m-0">Nueva Consulta</h5>
-            <div class="d-flex align-items-center gap-2">
-              <span class="badge bg-success-subtle text-success border border-success rounded-pill px-3 py-2">
-                👤 {{ usuario.email }}
-              </span>
-              <button @click="logout" class="btn btn-outline-danger btn-sm rounded-2">Salir</button>
-            </div>
-          </div>
+          <h5 class="fw-bold text-dark mb-3">Nueva Consulta</h5>
 
           <form @submit.prevent="agendarCita">
             <div class="mb-3">
-              <label class="form-label small fw-bold">Propietario</label>
-              <input v-model="nuevaCita.nombre_cliente" type="text" class="form-control" required />
+              <label class="form-label small fw-bold">Nombre Completo</label>
+              <input 
+                v-model="nuevaCita.nombre_cliente" 
+                type="text" 
+                class="form-control" 
+                :readonly="!!usuario" 
+                required 
+                placeholder="Ej. Juan Pérez" 
+              />
             </div>
             <div class="mb-3">
               <label class="form-label small fw-bold">Correo Electrónico</label>
-              <input v-model="nuevaCita.correo" type="email" class="form-control" disabled />
+              <input 
+                v-model="nuevaCita.correo" 
+                type="email" 
+                class="form-control" 
+                :readonly="!!usuario" 
+                required 
+                placeholder="correo@ejemplo.com" 
+              />
             </div>
             <div class="row g-2 mb-3">
               <div class="col-6">
@@ -209,6 +201,7 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- LISTADO DE CITAS -->
       <div class="col-md-7">
         <div class="card p-4 shadow-sm border-0 rounded-4">
           <h5 class="fw-bold text-dark mb-3">Citas Programadas</h5>
