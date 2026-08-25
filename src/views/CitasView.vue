@@ -18,16 +18,7 @@ const nuevaCita = ref<Cita>({
 })
 
 const comprobarUsuario = async () => {
-  const { data } = await supabase.auth.getSession()
-  usuario.value = data.session?.user || null
-
-  if (usuario.value) {
-    nuevaCita.value.correo = usuario.value.email || ''
-    nuevaCita.value.nombre_cliente = usuario.value.user_metadata?.full_name || ''
-    await cargarCitas()
-  }
-
-  // Escuchar cambios de autenticación
+  // 1. Escuchar únicamente los cambios de autenticación para evitar llamadas duplicadas
   const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
     usuario.value = session?.user || null
     if (session?.user) {
@@ -42,18 +33,18 @@ const comprobarUsuario = async () => {
   authListener = listener.subscription
 }
 
-// Genera la URL exacta respetando si usas WebHistory o WebHashHistory
+// Apunta únicamente al dominio raíz para evitar problemas con rutas de Hash
 const getRedirectUrl = () => {
-  const isHashMode = window.location.href.includes('#')
-  return isHashMode 
-    ? `${window.location.origin}/#/citas` 
-    : `${window.location.origin}/citas`
+  return `${window.location.origin}/`
 }
 
 const loginGoogle = async () => {
   const { error } = await supabase.auth.signInWithOAuth({ 
     provider: 'google', 
-    options: { redirectTo: getRedirectUrl() } 
+    options: { 
+      redirectTo: getRedirectUrl(),
+      queryParams: { prompt: 'select_account' }
+    } 
   })
   if (error) alert('Error al conectar con Google: ' + error.message)
 }
@@ -61,11 +52,12 @@ const loginGoogle = async () => {
 const loginGitHub = async () => {
   const { error } = await supabase.auth.signInWithOAuth({ 
     provider: 'github', 
-    options: { redirectTo: getRedirectUrl() } 
+    options: { 
+      redirectTo: getRedirectUrl()
+    } 
   })
   if (error) alert('Error al conectar con GitHub: ' + error.message)
 }
-
 const logout = async () => {
   await supabase.auth.signOut()
   usuario.value = null
