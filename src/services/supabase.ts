@@ -11,11 +11,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Función para Login Social (Google / GitHub / Twitter)
-export const loginWithProvider = async (provider: 'google' | 'github' | 'twitter') => {
+// Función general para iniciar sesión con cualquier proveedor social (Google, GitHub, etc.)
+export const loginWithProvider = async (provider: 'google' | 'github') => {
   const redirectUrl = window.location.hostname === 'localhost'
-    ? 'http://localhost:5173'
-    : 'https://exoticvet-frontend.onrender.com'
+    ? 'http://localhost:5173/'
+    : 'https://exoticvet-frontend.onrender.com/'
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: provider,
@@ -27,12 +27,12 @@ export const loginWithProvider = async (provider: 'google' | 'github' | 'twitter
       } : undefined
     }
   })
-  
-  if (error) console.error('Error al iniciar sesión:', error.message)
+
+  if (error) console.error(`Error al iniciar sesión con ${provider}:`, error.message)
   return { data, error }
 }
 
-// Función para Cerrar Sesión
+// Función para cerrar sesión
 export const logout = async () => {
   const { error } = await supabase.auth.signOut()
   if (error) console.error('Error al cerrar sesión:', error.message)
