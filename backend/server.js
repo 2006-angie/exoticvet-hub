@@ -7,7 +7,14 @@ const paypal = require('@paypal/checkout-server-sdk')
 const app = express()
 
 // Middlewares
-app.use(cors())
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://exoticvet-frontend.onrender.com'
+  ],
+  credentials: true
+}))
 app.use(express.json())
 
 // Inicializar Stripe
@@ -151,5 +158,5 @@ app.post('/paypal/capture-order/:orderID', async (req, res) => {
 // Encender servidor
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log(`🚀 Backend corriendo en http://localhost:${PORT}`)
+  console.log(`🚀 Backend corriendo en puerto ${PORT}`)
 })
